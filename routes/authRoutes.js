@@ -38,109 +38,87 @@ async function hashPassword(password) {
   return await bcrypt.hash(password, saltRounds);
 }
 
-// Generate a 6-digit verification code
-function generateVerificationCode() {
-  return Math.floor(100000 + Math.random() * 900000);
-}
-
-// SignUp route
-router.post("/SignUp", async (req, res) => {
+router.post("/signup", async (req, res) => {
+  // console.log('sent by client - ', req.body);
   const { name, email, password, dob, address } = req.body;
 
-  // Check for missing fields
-  if (!email || !name || !password || !dob || !address) {
-    return res.status(422).json({ error: "Please fill all the fields" });
-  }
+  const user = new User({
+    name,
+    email,
+    password,
+    dob,
+    address,
+  });
 
   try {
-    // Check if user already exists
-    const savedUser = await User.findOne({ email });
-    if (savedUser) {
-      return res.status(422).json({ error: "User already exists" });
-    }
-
-    // Hash the password
-    const hashedPassword = await hashPassword(password);
-
-    // Create and save the new user
-    const user = new User({
-      name,
-      email,
-      password: hashedPassword, // Save the hashed password
-      dob,
-      address,
-    });
     await user.save();
-
     const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET);
-    res.send({ token });
+    res.send({ message: "User Registered Successfully", token });
   } catch (err) {
-    console.log("db error", err);
-    return res.status(422).json({ error: err.message });
+    console.log(err);
   }
 });
 
 // Verify route
-router.post("/verify", async (req, res) => {
-    console.log('sent by client - ', req.body)
-    const { name, email, password, dob, address } = req.body;
-  
-    if (!email || !name || !password || !dob || !address) {
-      return res.status(422).json({ error: "Please fill all the fields authroutes" });
+router.post("/verify", (req, res) => {
+  console.log("sent by client - ", req.body);
+  const { name, email, password, dob, address } = req.body;
+  if (!name || !email || !password || !dob || !address) {
+    return res.status(422).json({ error: "Please add all the fields" });
+  }
+
+  User.findOne({ email: email }).then(async (savedUser) => {
+    if (savedUser) {
+      return res.status(422).json({ error: "Invalid Credentials" });
     }
-  
     try {
-      const savedUser = await User.findOne({ email: email });
-      if (savedUser) {
-        return res.status(422).json({ error: "User already exists" });
-      }
-  
-      // Generate the verification code
-      const verificationCode = generateVerificationCode();
-      console.log("Generated Verification Code:", verificationCode); // Log verification code to the console
-  
-      try {
-        await mailer(email, verificationCode); // Send the verification code via email
-        const user = [{ name, email, password, dob, address, verificationCode }];
-        res.send({
-          message:"Verification code sent to your email",
-          udata: user,
-        });
-      } catch (err) {
-        console.log("Error sending email:", err);
-        res.status(500).json({ error: "Error sending email" });
-      }
+      let VerificationCode = Math.floor(100000 + Math.random() * 900000);
+      let user = [
+        {
+          name,
+          email,
+          password,
+          dob,
+          address,
+          VerificationCode,
+        },
+      ];
+      await mailer(email, VerificationCode);
+      res.send({
+        message: "Verification Code Sent to your Email",
+        udata: user,
+      });
     } catch (err) {
       console.log(err);
-      return res.status(500).json({ error: "Server error" });
     }
   });
-  
+});
 
 // Signin route
 router.post("/signin", async (req, res) => {
   const { email, password } = req.body;
-
   if (!email || !password) {
-    return res.status(422).json({ error: "Please enter email and password" });
+    return res.status(422).json({ error: "Please add email or password" });
+  }
+  const savedUser = await User.findOne({ email: email });
+
+  if (!savedUser) {
+    return res.status(422).json({ error: "Invalid Credentials" });
   }
 
   try {
-    const savedUser = await User.findOne({ email });
-    if (!savedUser) {
-      return res.status(422).json({ error: "Invalid credentials" });
-    }
-
-    const passwordMatch = await bcrypt.compare(password, savedUser.password);
-    if (passwordMatch) {
-      const token = jwt.sign({ _id: savedUser._id }, process.env.JWT_SECRET);
-      return res.json({ message: "Signin successful", token });
-    } else {
-      return res.status(422).json({ error: "Invalid credentials" });
-    }
+    bcrypt.compare(password, savedUser.password, (err, result) => {
+      if (result) {
+        console.log("Password matched");
+        const token = jwt.sign({ _id: savedUser._id }, process.env.JWT_SECRET);
+        res.send({ token });
+      } else {
+        console.log("Password does not match");
+        return res.status(422).json({ error: "Invalid Credentials" });
+      }
+    });
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ error: "Server error" });
   }
 });
 
