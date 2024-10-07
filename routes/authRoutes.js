@@ -37,7 +37,7 @@ async function hashPassword(password) {
   const saltRounds = 10;
   return await bcrypt.hash(password, saltRounds);
 }
-
+// signup route
 router.post("/signup", async (req, res) => {
   // console.log('sent by client - ', req.body);
   const { name, email, password, dob, address } = req.body;
@@ -58,8 +58,8 @@ router.post("/signup", async (req, res) => {
     console.log(err);
   }
 });
-
 // Verify route
+
 router.post("/verify", (req, res) => {
   console.log("sent by client - ", req.body);
   const { name, email, password, dob, address } = req.body;
